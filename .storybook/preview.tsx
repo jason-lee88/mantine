@@ -1,20 +1,36 @@
+/* eslint-disable no-console */
 import React, { useEffect } from 'react';
-import addons from '@storybook/addons';
+import { addons } from '@storybook/preview-api';
 import { IconTextDirectionLtr, IconTextDirectionRtl } from '@tabler/icons-react';
 import { DARK_MODE_EVENT_NAME } from 'storybook-dark-mode';
 import {
-  MantineProvider,
-  useMantineColorScheme,
   ActionIcon,
   DirectionProvider,
+  MantineProvider,
   useDirection,
+  useMantineColorScheme,
 } from '@mantine/core';
+import { MantineEmotionProvider } from '@mantine/emotion';
+import { ModalsProvider } from '@mantine/modals';
 import { Notifications } from '@mantine/notifications';
-import { theme } from '../docs/theme';
+import { ShikiProvider } from '@mantinex/shiki';
+import { theme } from '../apps/mantine.dev/theme';
 
-export const parameters = { layout: 'fullscreen' };
+export const parameters = {
+  layout: 'fullscreen',
+};
 
 const channel = addons.getChannel();
+
+// Removes incorrect key error from SliderMarks component visible only in Storybook
+const originalError = console.error;
+console.error = (...args: any[]) => {
+  if (args.join('').includes('It was passed a child from @mantine/core/SliderMarks')) {
+    return;
+  }
+
+  originalError.call(console, ...args);
+};
 
 function ColorSchemeWrapper({ children }: { children: React.ReactNode }) {
   const { setColorScheme } = useMantineColorScheme();
@@ -45,14 +61,37 @@ function DirectionWrapper({ children }: { children: React.ReactNode }) {
       >
         {dir === 'ltr' ? <IconTextDirectionLtr /> : <IconTextDirectionRtl />}
       </ActionIcon>
-      <Notifications />
       {children}
     </>
   );
 }
 
+async function loadShiki() {
+  const { getHighlighter } = await import('shiki');
+  const shiki = await getHighlighter({
+    langs: ['tsx', 'scss', 'html', 'bash', 'json'],
+    themes: [],
+  });
+
+  return shiki;
+}
+
 export const decorators = [
   (renderStory: any) => <DirectionWrapper>{renderStory()}</DirectionWrapper>,
   (renderStory: any) => <ColorSchemeWrapper>{renderStory()}</ColorSchemeWrapper>,
-  (renderStory: any) => <MantineProvider theme={theme}>{renderStory()}</MantineProvider>,
+  (renderStory: any) => <ShikiProvider loadShiki={loadShiki}>{renderStory()}</ShikiProvider>,
+  (renderStory: any) => (
+    <ModalsProvider
+      labels={{ confirm: 'Confirm', cancel: 'Cancel' }}
+      modalProps={{ trapFocus: false }}
+    >
+      {renderStory()}
+    </ModalsProvider>
+  ),
+  (renderStory: any) => (
+    <MantineProvider theme={theme}>
+      <Notifications zIndex={10000} />
+      <MantineEmotionProvider>{renderStory()}</MantineEmotionProvider>
+    </MantineProvider>
+  ),
 ];
